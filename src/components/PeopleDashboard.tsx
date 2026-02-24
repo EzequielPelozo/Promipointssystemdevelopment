@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { User, PointAssignment } from '../types';
-import { storage, getCurrentMonth } from '../utils/storage';
+import { getUsers, getAllAssignments, getMyAllocation } from '../utils/api';
+import { getCurrentMonth } from '../utils/storage';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
@@ -36,55 +37,64 @@ export function PeopleDashboard({ user, onLogout }: PeopleDashboardProps) {
 
   useEffect(() => {
     setTimeout(() => {
-      loadData();
-      setIsLoading(false);
+      loadData().finally(() => setIsLoading(false));
     }, 800);
   }, []);
 
-  const loadData = () => {
-    const allUsers = storage.getUsers();
-    setUsers(allUsers);
-
+  const loadData = async () => {
     const month = getCurrentMonth();
-    const allAssignments = storage.getAssignments();
-    const currentMonthAssignments = allAssignments.filter(a => a.month === month);
-    setAssignments(currentMonthAssignments);
+    try {
+      const [allUsers, allAssignments] = await Promise.all([
+        getUsers(),
+        getAllAssignments(),
+      ]);
 
-    const report = allUsers.map(u => {
-      const received = currentMonthAssignments.filter(a => a.toUserId === u.id);
-      const totalPoints = received.reduce((sum, a) => sum + a.points, 0);
-      const allocation = storage.getUserAllocation(u.id, month);
+      setUsers(allUsers);
 
-      const categoryBreakdown = received.reduce((acc, a) => {
+      const currentMonthAssignments = allAssignments.filter(a => a.month === month);
+      setAssignments(currentMonthAssignments);
+
+      // Build per-user allocations via API
+      const allocations = await Promise.all(
+        allUsers.map(u => getMyAllocation(month).catch(() => ({ userId: u.id, month, pointsRemaining: 10, pointsReceived: 0 })))
+      );
+
+      // Actually fetch allocations for all users — but we only have "me" endpoint
+      // So compute pointsGiven from assignments
+      const report = allUsers.map(u => {
+        const received = currentMonthAssignments.filter(a => a.toUserId === u.id);
+        const sent = currentMonthAssignments.filter(a => a.fromUserId === u.id);
+        const totalPoints = received.reduce((sum, a) => sum + a.points, 0);
+        const pointsGiven = sent.reduce((sum, a) => sum + a.points, 0);
+
+        const categoryBreakdown = received.reduce((acc, a) => {
+          acc[a.category] = (acc[a.category] || 0) + a.points;
+          return acc;
+        }, {} as Record<string, number>);
+
+        return {
+          userId: u.id,
+          name: u.name,
+          email: u.email,
+          department: u.department,
+          pointsReceived: totalPoints,
+          recognitionCount: received.length,
+          pointsGiven,
+          categoryBreakdown,
+        };
+      });
+
+      setReportData(report);
+
+      const categoryTotals = currentMonthAssignments.reduce((acc, a) => {
         acc[a.category] = (acc[a.category] || 0) + a.points;
         return acc;
       }, {} as Record<string, number>);
 
-      return {
-        userId: u.id,
-        name: u.name,
-        email: u.email,
-        department: u.department,
-        pointsReceived: totalPoints,
-        recognitionCount: received.length,
-        pointsGiven: allocation ? 10 - allocation.pointsRemaining : 0,
-        categoryBreakdown,
-      };
-    });
-
-    setReportData(report);
-
-    const categoryTotals = currentMonthAssignments.reduce((acc, a) => {
-      acc[a.category] = (acc[a.category] || 0) + a.points;
-      return acc;
-    }, {} as Record<string, number>);
-
-    const categoryDataArray = Object.entries(categoryTotals).map(([name, value]) => ({
-      name,
-      value,
-    }));
-
-    setCategoryData(categoryDataArray);
+      setCategoryData(Object.entries(categoryTotals).map(([name, value]) => ({ name, value })));
+    } catch (err) {
+      console.error('Error loading people dashboard data', err);
+    }
   };
 
   const exportToCSV = () => {
@@ -112,7 +122,7 @@ export function PeopleDashboard({ user, onLogout }: PeopleDashboardProps) {
     a.download = `promipoints-reporte-${month}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-    
+
     toast.success('Reporte exportado exitosamente', {
       description: `Archivo: promipoints-reporte-${month}.csv`
     });
@@ -147,7 +157,7 @@ export function PeopleDashboard({ user, onLogout }: PeopleDashboardProps) {
     a.download = `promipoints-detallado-${month}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-    
+
     toast.success('Reporte detallado exportado', {
       description: `Archivo: promipoints-detallado-${month}.csv`
     });
@@ -172,10 +182,10 @@ export function PeopleDashboard({ user, onLogout }: PeopleDashboardProps) {
 
   const totalPointsCirculating = assignments.reduce((sum, a) => sum + a.points, 0);
   const activeUsers = reportData.filter(r => r.pointsGiven > 0).length;
-  const avgPointsPerUser = reportData.length > 0 
-    ? (totalPointsCirculating / reportData.length).toFixed(1) 
+  const avgPointsPerUser = reportData.length > 0
+    ? (totalPointsCirculating / reportData.length).toFixed(1)
     : 0;
-  const participationRate = users.length > 0 
+  const participationRate = users.length > 0
     ? ((activeUsers / users.length) * 100).toFixed(0)
     : 0;
 
@@ -192,7 +202,7 @@ export function PeopleDashboard({ user, onLogout }: PeopleDashboardProps) {
     <TooltipProvider>
       <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-secondary/5">
         {/* Header */}
-        <motion.header 
+        <motion.header
           className="bg-card border-b shadow-sm sticky top-0 z-40"
           initial={{ y: -100 }}
           animate={{ y: 0 }}
@@ -229,7 +239,7 @@ export function PeopleDashboard({ user, onLogout }: PeopleDashboardProps) {
           ) : (
             <>
               {/* KPIs */}
-              <motion.div 
+              <motion.div
                 className="grid gap-4 md:grid-cols-4"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -240,7 +250,7 @@ export function PeopleDashboard({ user, onLogout }: PeopleDashboardProps) {
                     <Users className="h-5 w-5 text-primary" />
                   </CardHeader>
                   <CardContent>
-                    <motion.div 
+                    <motion.div
                       className="text-4xl"
                       initial={{ scale: 0 }}
                       animate={{ scale: 1 }}
@@ -258,7 +268,7 @@ export function PeopleDashboard({ user, onLogout }: PeopleDashboardProps) {
                     <TrendingUp className="h-5 w-5 text-success" />
                   </CardHeader>
                   <CardContent>
-                    <motion.div 
+                    <motion.div
                       className="text-4xl text-success"
                       initial={{ scale: 0 }}
                       animate={{ scale: 1 }}
@@ -278,7 +288,7 @@ export function PeopleDashboard({ user, onLogout }: PeopleDashboardProps) {
                     <Award className="h-5 w-5 text-secondary" />
                   </CardHeader>
                   <CardContent>
-                    <motion.div 
+                    <motion.div
                       className="text-4xl text-secondary"
                       initial={{ scale: 0 }}
                       animate={{ scale: 1 }}
@@ -296,7 +306,7 @@ export function PeopleDashboard({ user, onLogout }: PeopleDashboardProps) {
                     <BarChart3 className="h-5 w-5 text-[#FFC107]" />
                   </CardHeader>
                   <CardContent>
-                    <motion.div 
+                    <motion.div
                       className="text-4xl"
                       initial={{ scale: 0 }}
                       animate={{ scale: 1 }}
@@ -322,7 +332,7 @@ export function PeopleDashboard({ user, onLogout }: PeopleDashboardProps) {
                       Analíticas
                     </TabsTrigger>
                   </TabsList>
-                  
+
                   <div className="flex gap-2">
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -333,7 +343,7 @@ export function PeopleDashboard({ user, onLogout }: PeopleDashboardProps) {
                       </TooltipTrigger>
                       <TooltipContent>Exportar reporte consolidado</TooltipContent>
                     </Tooltip>
-                    
+
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button onClick={exportDetailedReport} variant="outline" size="sm">
@@ -357,7 +367,7 @@ export function PeopleDashboard({ user, onLogout }: PeopleDashboardProps) {
                           </CardDescription>
                         </div>
                       </div>
-                      
+
                       {/* Filters */}
                       <div className="grid gap-3 sm:grid-cols-3 pt-4">
                         <div className="relative">
@@ -369,7 +379,7 @@ export function PeopleDashboard({ user, onLogout }: PeopleDashboardProps) {
                             className="pl-10"
                           />
                         </div>
-                        
+
                         <Select value={filterDepartment} onValueChange={setFilterDepartment}>
                           <SelectTrigger>
                             <Filter className="w-4 h-4 mr-2" />
@@ -388,7 +398,7 @@ export function PeopleDashboard({ user, onLogout }: PeopleDashboardProps) {
                         </div>
                       </div>
                     </CardHeader>
-                    
+
                     <CardContent>
                       {/* Desktop Table View */}
                       <div className="rounded-lg border overflow-x-auto hidden lg:block">
@@ -396,7 +406,7 @@ export function PeopleDashboard({ user, onLogout }: PeopleDashboardProps) {
                           <TableHeader>
                             <TableRow>
                               <TableHead>
-                                <button 
+                                <button
                                   onClick={() => toggleSort('name')}
                                   className="flex items-center gap-1 hover:text-primary transition-colors"
                                 >
@@ -407,7 +417,7 @@ export function PeopleDashboard({ user, onLogout }: PeopleDashboardProps) {
                                 </button>
                               </TableHead>
                               <TableHead>
-                                <button 
+                                <button
                                   onClick={() => toggleSort('department')}
                                   className="flex items-center gap-1 hover:text-primary transition-colors"
                                 >
@@ -418,7 +428,7 @@ export function PeopleDashboard({ user, onLogout }: PeopleDashboardProps) {
                                 </button>
                               </TableHead>
                               <TableHead className="text-center">
-                                <button 
+                                <button
                                   onClick={() => toggleSort('points')}
                                   className="flex items-center gap-1 hover:text-primary transition-colors mx-auto"
                                 >
@@ -568,15 +578,15 @@ export function PeopleDashboard({ user, onLogout }: PeopleDashboardProps) {
                           <ResponsiveContainer width="100%" height={350}>
                             <BarChart data={reportData.slice(0, 10)}>
                               <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
-                              <XAxis 
-                                dataKey="name" 
-                                angle={-45} 
-                                textAnchor="end" 
+                              <XAxis
+                                dataKey="name"
+                                angle={-45}
+                                textAnchor="end"
                                 height={120}
                                 fontSize={12}
                               />
                               <YAxis fontSize={12} />
-                              <ChartTooltip 
+                              <ChartTooltip
                                 contentStyle={{
                                   backgroundColor: 'white',
                                   border: '2px solid #e0e0e0',
@@ -616,7 +626,7 @@ export function PeopleDashboard({ user, onLogout }: PeopleDashboardProps) {
                                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                 ))}
                               </Pie>
-                              <ChartTooltip 
+                              <ChartTooltip
                                 contentStyle={{
                                   backgroundColor: 'white',
                                   border: '2px solid #e0e0e0',
@@ -641,7 +651,7 @@ export function PeopleDashboard({ user, onLogout }: PeopleDashboardProps) {
                         </CardHeader>
                         <CardContent>
                           <ResponsiveContainer width="100%" height={350}>
-                            <BarChart 
+                            <BarChart
                               data={Object.entries(
                                 reportData.reduce((acc, r) => {
                                   acc[r.department] = (acc[r.department] || 0) + r.pointsGiven;
@@ -652,7 +662,7 @@ export function PeopleDashboard({ user, onLogout }: PeopleDashboardProps) {
                               <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
                               <XAxis dataKey="department" fontSize={12} />
                               <YAxis fontSize={12} />
-                              <ChartTooltip 
+                              <ChartTooltip
                                 contentStyle={{
                                   backgroundColor: 'white',
                                   border: '2px solid #e0e0e0',
@@ -678,39 +688,39 @@ export function PeopleDashboard({ user, onLogout }: PeopleDashboardProps) {
                         </CardHeader>
                         <CardContent className="space-y-4">
                           <div className="grid grid-cols-2 gap-4">
-                            <motion.div 
+                            <motion.div
                               className="bg-gradient-to-br from-primary/10 to-primary/5 rounded-lg p-4 border"
                               whileHover={{ scale: 1.02 }}
                             >
                               <p className="text-sm text-muted-foreground mb-1">Total Transacciones</p>
                               <p className="text-3xl text-primary">{assignments.length}</p>
                             </motion.div>
-                            
-                            <motion.div 
+
+                            <motion.div
                               className="bg-gradient-to-br from-secondary/10 to-secondary/5 rounded-lg p-4 border"
                               whileHover={{ scale: 1.02 }}
                             >
                               <p className="text-sm text-muted-foreground mb-1">Promedio/Asignación</p>
                               <p className="text-3xl text-secondary">
-                                {assignments.length > 0 
+                                {assignments.length > 0
                                   ? (totalPointsCirculating / assignments.length).toFixed(1)
                                   : 0}
                               </p>
                             </motion.div>
-                            
-                            <motion.div 
+
+                            <motion.div
                               className="bg-gradient-to-br from-success/10 to-success/5 rounded-lg p-4 border"
                               whileHover={{ scale: 1.02 }}
                             >
                               <p className="text-sm text-muted-foreground mb-1">Categoría Popular</p>
                               <p className="text-lg text-success mt-2">
-                                {categoryData.length > 0 
+                                {categoryData.length > 0
                                   ? categoryData.sort((a, b) => b.value - a.value)[0].name
                                   : 'N/A'}
                               </p>
                             </motion.div>
-                            
-                            <motion.div 
+
+                            <motion.div
                               className="bg-gradient-to-br from-[#FFC107]/10 to-[#FFC107]/5 rounded-lg p-4 border"
                               whileHover={{ scale: 1.02 }}
                             >

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { User } from '../types';
-import { storage } from '../utils/storage';
+import { login } from '../utils/api';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
@@ -16,6 +16,7 @@ interface LoginProps {
 
 export function Login({ onLogin }: LoginProps) {
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -24,40 +25,36 @@ export function Login({ onLogin }: LoginProps) {
     setError('');
     setIsLoading(true);
 
-    // Simular delay de autenticación
-    await new Promise(resolve => setTimeout(resolve, 800));
-
-    if (!email.endsWith('@grupoprominente.com')) {
-      setError('Debes usar tu correo corporativo (@grupoprominente.com)');
+    try {
+      const { user } = await login(email, password);
+      onLogin(user);
+    } catch (err: any) {
+      const msg = err?.response?.data?.error?.message || err?.response?.data?.message;
+      if (err?.response?.status === 401) {
+        setError('Credenciales inválidas. Verificá tu correo y contraseña.');
+      } else if (msg) {
+        setError(msg);
+      } else {
+        setError('Error al iniciar sesión. Intentá de nuevo.');
+      }
+    } finally {
       setIsLoading(false);
-      return;
     }
-
-    const users = storage.getUsers();
-    const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
-
-    if (!user) {
-      setError('Usuario no encontrado en la nómina. Contacta a People & Culture para obtener acceso.');
-      setIsLoading(false);
-      return;
-    }
-
-    storage.ensureMonthlyAllocation(user.id);
-    onLogin(user);
   };
 
-  const handleDemoLogin = async (userEmail: string) => {
+  const handleDemoLogin = async (userEmail: string, userPassword = 'Promi2024!') => {
     setEmail(userEmail);
+    setPassword(userPassword);
     setError('');
     setIsLoading(true);
-    
-    await new Promise(resolve => setTimeout(resolve, 600));
-    
-    const users = storage.getUsers();
-    const user = users.find(u => u.email === userEmail);
-    if (user) {
-      storage.ensureMonthlyAllocation(user.id);
+
+    try {
+      const { user } = await login(userEmail, userPassword);
       onLogin(user);
+    } catch {
+      setError('Error al iniciar sesión con usuario demo.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -71,7 +68,7 @@ export function Login({ onLogin }: LoginProps) {
         >
           <Card className="w-full max-w-md shadow-xl border-2">
             <CardHeader className="text-center space-y-6 pb-8">
-              <motion.div 
+              <motion.div
                 className="flex justify-center"
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
@@ -91,7 +88,7 @@ export function Login({ onLogin }: LoginProps) {
                 </div>
               </div>
             </CardHeader>
-            
+
             <CardContent className="space-y-6">
               <form onSubmit={handleLogin} className="space-y-4">
                 <div className="space-y-2">
@@ -111,7 +108,7 @@ export function Login({ onLogin }: LoginProps) {
                       </TooltipContent>
                     </Tooltip>
                   </div>
-                  
+
                   <div className="relative group">
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
                     <Input
@@ -126,9 +123,27 @@ export function Login({ onLogin }: LoginProps) {
                       className="pl-10 h-12 border-2 focus:border-primary transition-all"
                       required
                       disabled={isLoading}
-                      aria-describedby={error ? "email-error" : undefined}
                     />
-                    <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="password">Contraseña</Label>
+                  <div className="relative group">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                    <Input
+                      id="password"
+                      type="password"
+                      placeholder="••••••••"
+                      value={password}
+                      onChange={(e) => {
+                        setPassword(e.target.value);
+                        setError('');
+                      }}
+                      className="pl-10 h-12 border-2 focus:border-primary transition-all"
+                      required
+                      disabled={isLoading}
+                    />
                   </div>
                 </div>
 
@@ -138,7 +153,7 @@ export function Login({ onLogin }: LoginProps) {
                     animate={{ opacity: 1, height: 'auto' }}
                     exit={{ opacity: 0, height: 0 }}
                   >
-                    <Alert variant="destructive" id="email-error">
+                    <Alert variant="destructive" id="login-error">
                       <AlertCircle className="h-4 w-4" />
                       <AlertDescription className="ml-2">
                         {error}
@@ -147,8 +162,8 @@ export function Login({ onLogin }: LoginProps) {
                   </motion.div>
                 )}
 
-                <Button 
-                  type="submit" 
+                <Button
+                  type="submit"
                   className="w-full h-12 shadow-md hover:shadow-lg transition-all"
                   disabled={isLoading}
                 >
@@ -173,7 +188,7 @@ export function Login({ onLogin }: LoginProps) {
                   </div>
                   <div className="relative flex justify-center text-sm">
                     <span className="bg-card px-3 text-muted-foreground">
-                      Demo - Usuarios de prueba
+                      Demo - Usuarios de prueba (pass: Promi2024!)
                     </span>
                   </div>
                 </div>
@@ -196,7 +211,7 @@ export function Login({ onLogin }: LoginProps) {
                       </div>
                     </div>
                   </Button>
-                  
+
                   <Button
                     type="button"
                     variant="outline"
@@ -218,7 +233,7 @@ export function Login({ onLogin }: LoginProps) {
               </div>
 
               <div className="text-center text-xs text-muted-foreground pt-4 border-t">
-                <p>¿Necesitas ayuda? Contacta a 
+                <p>¿Necesitas ayuda? Contacta a
                   <span className="text-primary ml-1 cursor-pointer hover:underline">
                     people@grupoprominente.com
                   </span>

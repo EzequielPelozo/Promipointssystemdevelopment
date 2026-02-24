@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { User } from './types';
-import { storage, initializeDemoData } from './utils/storage';
+import { getMe, getToken, logout } from './utils/api';
 import { Login } from './components/Login';
 import { UserDashboard } from './components/UserDashboard';
 import { PeopleDashboard } from './components/PeopleDashboard';
@@ -11,22 +11,27 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Initialize demo data
-    initializeDemoData();
+    const token = getToken();
+    if (!token) {
+      setIsLoading(false);
+      return;
+    }
 
-    // Check for existing session
-    const user = storage.getCurrentUser();
-    setCurrentUser(user);
-    setIsLoading(false);
+    getMe()
+      .then((user) => setCurrentUser(user))
+      .catch(() => {
+        // Token invalid or expired — clear it
+        logout();
+      })
+      .finally(() => setIsLoading(false));
   }, []);
 
   const handleLogin = (user: User) => {
-    storage.setCurrentUser(user);
     setCurrentUser(user);
   };
 
   const handleLogout = () => {
-    storage.setCurrentUser(null);
+    logout();
     setCurrentUser(null);
   };
 
@@ -57,8 +62,8 @@ export default function App() {
       ) : (
         <UserDashboard user={currentUser} onLogout={handleLogout} />
       )}
-      <Toaster 
-        position="top-center" 
+      <Toaster
+        position="top-center"
         expand={false}
         richColors
         toastOptions={{

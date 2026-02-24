@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { User, Category, PointAssignment } from '../types';
-import { storage, getCurrentMonth } from '../utils/storage';
+import { User, Category } from '../types';
+import { getUsers, getMyAllocation, createAssignment } from '../utils/api';
+import { getCurrentMonth } from '../utils/storage';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -54,13 +55,11 @@ export function AssignPoints({ currentUser, onClose, onSuccess }: AssignPointsPr
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    const allUsers = storage.getUsers();
-    const otherUsers = allUsers.filter(u => u.id !== currentUser.id);
-    setUsers(otherUsers);
-
     const month = getCurrentMonth();
-    const allocation = storage.getUserAllocation(currentUser.id, month);
-    setAvailablePoints(allocation?.pointsRemaining || 0);
+    Promise.all([getUsers(), getMyAllocation(month)]).then(([allUsers, allocation]) => {
+      setUsers(allUsers.filter(u => u.id !== currentUser.id));
+      setAvailablePoints(allocation.pointsRemaining);
+    }).catch(console.error);
   }, [currentUser.id]);
 
   const filteredUsers = users.filter(user =>
@@ -99,44 +98,29 @@ export function AssignPoints({ currentUser, onClose, onSuccess }: AssignPointsPr
 
     setIsSubmitting(true);
 
-    await new Promise(resolve => setTimeout(resolve, 800));
+    try {
+      await createAssignment({
+        toUserId: parseInt(selectedUser.id),
+        points,
+        category,
+        message: message.trim() || undefined,
+      });
 
-    const month = getCurrentMonth();
-    
-    const assignment: PointAssignment = {
-      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      fromUserId: currentUser.id,
-      toUserId: selectedUser.id,
-      points,
-      category,
-      message: message.trim() || undefined,
-      timestamp: Date.now(),
-      month,
-    };
+      toast.success(
+        `¡Reconocimiento enviado!`,
+        {
+          description: `${points} PromiPoint${points > 1 ? 's' : ''} asignado${points > 1 ? 's' : ''} a ${selectedUser.name}`,
+          duration: 4000,
+        }
+      );
 
-    storage.addAssignment(assignment);
-
-    const senderAllocation = storage.getUserAllocation(currentUser.id, month);
-    if (senderAllocation) {
-      senderAllocation.pointsRemaining -= points;
-      storage.updateAllocation(senderAllocation);
+      onSuccess();
+    } catch (err: any) {
+      const msg = err?.response?.data?.error?.message || 'Error al enviar el reconocimiento';
+      toast.error(msg);
+    } finally {
+      setIsSubmitting(false);
     }
-
-    const receiverAllocation = storage.getUserAllocation(selectedUser.id, month);
-    if (receiverAllocation) {
-      receiverAllocation.pointsReceived += points;
-      storage.updateAllocation(receiverAllocation);
-    }
-
-    toast.success(
-      `¡Reconocimiento enviado!`,
-      {
-        description: `${points} PromiPoint${points > 1 ? 's' : ''} asignado${points > 1 ? 's' : ''} a ${selectedUser.name}`,
-        duration: 4000,
-      }
-    );
-    
-    onSuccess();
   };
 
   const handleBack = () => {
@@ -288,7 +272,7 @@ export function AssignPoints({ currentUser, onClose, onSuccess }: AssignPointsPr
                           </TooltipContent>
                         </Tooltip>
                       </div>
-                      
+
                       <div className="grid grid-cols-4 gap-2 sm:gap-3">
                         {[1, 2, 3, 5].map(value => (
                           <motion.button
@@ -318,7 +302,7 @@ export function AssignPoints({ currentUser, onClose, onSuccess }: AssignPointsPr
                           </motion.button>
                         ))}
                       </div>
-                      
+
                       {errors.points && (
                         <p className="text-sm text-destructive flex items-center gap-1">
                           <AlertCircle className="w-3 h-3" />
@@ -340,7 +324,7 @@ export function AssignPoints({ currentUser, onClose, onSuccess }: AssignPointsPr
                           </TooltipContent>
                         </Tooltip>
                       </div>
-                      
+
                       <Select value={category} onValueChange={(value) => {
                         setCategory(value as Category);
                         setErrors({});
@@ -359,7 +343,7 @@ export function AssignPoints({ currentUser, onClose, onSuccess }: AssignPointsPr
                           ))}
                         </SelectContent>
                       </Select>
-                      
+
                       {errors.category && (
                         <p className="text-sm text-destructive flex items-center gap-1">
                           <AlertCircle className="w-3 h-3" />
@@ -398,16 +382,16 @@ export function AssignPoints({ currentUser, onClose, onSuccess }: AssignPointsPr
 
                     {/* Actions */}
                     <div className="flex gap-2 sm:gap-3 pt-2 sm:pt-4 border-t">
-                      <Button 
-                        type="button" 
-                        variant="outline" 
-                        onClick={onClose} 
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={onClose}
                         className="flex-1 h-11 sm:h-12"
                         disabled={isSubmitting}
                       >
                         Cancelar
                       </Button>
-                      <Button 
+                      <Button
                         onClick={handlePreview}
                         className="flex-1 bg-secondary hover:bg-secondary/90 shadow-md h-11 sm:h-12"
                         disabled={!category || availablePoints === 0 || isSubmitting}
@@ -436,7 +420,7 @@ export function AssignPoints({ currentUser, onClose, onSuccess }: AssignPointsPr
                   >
                     <Gift className="w-10 h-10 sm:w-12 sm:h-12 text-white" />
                   </motion.div>
-                  
+
                   <h3 className="text-xl sm:text-2xl mb-2">Confirma tu reconocimiento</h3>
                   <p className="text-sm sm:text-base text-muted-foreground px-4">
                     Revisa los detalles antes de enviar
@@ -483,9 +467,9 @@ export function AssignPoints({ currentUser, onClose, onSuccess }: AssignPointsPr
                 </Alert>
 
                 <div className="flex gap-2 sm:gap-3 pt-2 sm:pt-4">
-                  <Button 
-                    type="button" 
-                    variant="outline" 
+                  <Button
+                    type="button"
+                    variant="outline"
                     onClick={handleBack}
                     className="flex-1 h-11 sm:h-12"
                     disabled={isSubmitting}
@@ -493,7 +477,7 @@ export function AssignPoints({ currentUser, onClose, onSuccess }: AssignPointsPr
                     <ArrowLeft className="w-4 h-4 mr-2" />
                     Volver
                   </Button>
-                  <Button 
+                  <Button
                     onClick={handleSubmit}
                     className="flex-1 bg-secondary hover:bg-secondary/90 shadow-md h-11 sm:h-12"
                     disabled={isSubmitting}

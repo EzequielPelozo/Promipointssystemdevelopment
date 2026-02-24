@@ -53,7 +53,13 @@
       outDir: 'build',
     },
     server: {
-      port: 3000,
-      open: true,
+    port: 3000,
+    open: true,
+    proxy: {
+      '/auth': { target: 'https://localhost:7092', changeOrigin: true, secure: false },
+      '/users': { target: 'https://localhost:7092', changeOrigin: true, secure: false },
+      '/allocations': { target: 'https://localhost:7092', changeOrigin: true, secure: false },
+      '/assignments': { target: 'https://localhost:7092', changeOrigin: true, secure: false },
     },
+  },
   });

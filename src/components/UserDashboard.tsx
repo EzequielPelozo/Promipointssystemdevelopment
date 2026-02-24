@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { User, MonthlyAllocation, PointAssignment } from '../types';
-import { storage, getCurrentMonth } from '../utils/storage';
+import { getMyAllocation, getReceivedAssignments } from '../utils/api';
+import { getCurrentMonth } from '../utils/storage';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
@@ -25,14 +26,19 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  const loadData = () => {
+  const loadData = async () => {
     const month = getCurrentMonth();
-    const alloc = storage.getUserAllocation(user.id, month);
-    setAllocation(alloc);
-
-    const received = storage.getReceivedPoints(user.id);
-    const currentMonthReceived = received.filter(a => a.month === month);
-    setReceivedPoints(currentMonthReceived);
+    try {
+      const [alloc, received] = await Promise.all([
+        getMyAllocation(month),
+        getReceivedAssignments(),
+      ]);
+      setAllocation(alloc);
+      const currentMonthReceived = received.filter(a => a.month === month);
+      setReceivedPoints(currentMonthReceived);
+    } catch (err) {
+      console.error('Error loading dashboard data', err);
+    }
   };
 
   useEffect(() => {
@@ -42,8 +48,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
     }
 
     setTimeout(() => {
-      loadData();
-      setIsLoading(false);
+      loadData().finally(() => setIsLoading(false));
     }, 600);
   }, [user.id]);
 
@@ -77,7 +82,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
         <MobileNav user={user} onLogout={onLogout} />
 
         {/* Desktop Header */}
-        <motion.header 
+        <motion.header
           className="bg-card border-b shadow-sm sticky top-0 z-40 hidden lg:block"
           initial={{ y: -100 }}
           animate={{ y: 0 }}
@@ -116,8 +121,8 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
             <DashboardSkeleton />
           ) : (
             <>
-              {/* Stats Overview - Optimizado para móvil */}
-              <motion.div 
+              {/* Stats Overview */}
+              <motion.div
                 className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-3"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -140,7 +145,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
                   </CardHeader>
                   <CardContent>
                     <div className="flex items-baseline gap-2">
-                      <motion.div 
+                      <motion.div
                         className="text-3xl sm:text-4xl text-primary"
                         initial={{ scale: 0 }}
                         animate={{ scale: 1 }}
@@ -174,7 +179,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
                     <Award className="h-5 w-5 text-secondary" />
                   </CardHeader>
                   <CardContent>
-                    <motion.div 
+                    <motion.div
                       className="text-3xl sm:text-4xl text-secondary"
                       initial={{ scale: 0 }}
                       animate={{ scale: 1 }}
@@ -208,7 +213,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
                     <Sparkles className="h-5 w-5 text-[#FFC107]" />
                   </CardHeader>
                   <CardContent>
-                    <motion.div 
+                    <motion.div
                       className="text-3xl sm:text-4xl"
                       initial={{ scale: 0 }}
                       animate={{ scale: 1 }}
@@ -221,14 +226,14 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
                 </Card>
               </motion.div>
 
-              {/* Action Card - Mejorado para móvil */}
+              {/* Action Card */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2 }}
               >
                 <Card className={`border-2 transition-all duration-300 ${
-                  (allocation?.pointsRemaining || 0) > 0 
+                  (allocation?.pointsRemaining || 0) > 0
                     ? 'bg-gradient-to-br from-primary/5 to-secondary/5 hover:shadow-lg'
                     : 'bg-muted/30'
                 }`}>
@@ -261,7 +266,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
                         <span>¡Solo quedan {daysRemaining} {daysRemaining === 1 ? 'día' : 'días'}! No olvides usar tus puntos</span>
                       </div>
                     )}
-                    <Button 
+                    <Button
                       onClick={() => setShowAssignModal(true)}
                       disabled={(allocation?.pointsRemaining || 0) === 0}
                       className="w-full bg-secondary hover:bg-secondary/90 shadow-md hover:shadow-lg transition-all h-12 text-base"
@@ -274,7 +279,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
                 </Card>
               </motion.div>
 
-              {/* Received Points - Optimizado para móvil con cards */}
+              {/* Received Points */}
               <AnimatePresence>
                 {receivedPoints.length > 0 && (
                   <motion.div
@@ -294,7 +299,6 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
                         </CardDescription>
                       </CardHeader>
                       <CardContent className="space-y-4">
-                        {/* Category breakdown - Grid responsivo */}
                         <div className="grid gap-3 grid-cols-2 sm:grid-cols-2 lg:grid-cols-4">
                           {Object.entries(categoryBreakdown).map(([category, points], index) => (
                             <motion.div
@@ -307,7 +311,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
                               <p className="text-xs sm:text-sm text-muted-foreground mb-2 line-clamp-2">{category}</p>
                               <p className="text-2xl sm:text-3xl text-secondary">{points}</p>
                               <div className="mt-2 h-1 bg-secondary/20 rounded-full overflow-hidden">
-                                <motion.div 
+                                <motion.div
                                   className="h-full bg-secondary rounded-full"
                                   initial={{ width: 0 }}
                                   animate={{ width: `${(points / Math.max(...Object.values(categoryBreakdown))) * 100}%` }}
@@ -318,7 +322,6 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
                           ))}
                         </div>
 
-                        {/* History - Cards en móvil */}
                         <div className="border-t pt-4 space-y-3">
                           <h4 className="flex items-center gap-2 text-sm sm:text-base">
                             <Clock className="w-4 h-4 text-muted-foreground" />
@@ -353,7 +356,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
                                   )}
                                 </div>
                                 <div className="text-left sm:text-right sm:ml-4">
-                                  <motion.div 
+                                  <motion.div
                                     className="text-3xl text-secondary inline-block"
                                     initial={{ scale: 0 }}
                                     animate={{ scale: 1 }}
@@ -372,7 +375,6 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
                 )}
               </AnimatePresence>
 
-              {/* Empty state */}
               {receivedPoints.length === 0 && (
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
@@ -382,11 +384,11 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
                   <Card className="border-2 border-dashed">
                     <CardContent className="flex flex-col items-center justify-center py-12 sm:py-16">
                       <motion.div
-                        animate={{ 
+                        animate={{
                           rotate: [0, 10, -10, 10, 0],
                           scale: [1, 1.1, 1]
                         }}
-                        transition={{ 
+                        transition={{
                           duration: 2,
                           repeat: Infinity,
                           repeatDelay: 3
@@ -406,7 +408,6 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
           )}
         </main>
 
-        {/* Floating Action Button para móvil */}
         {!isLoading && (allocation?.pointsRemaining || 0) > 0 && (
           <motion.div
             className="fixed bottom-6 right-4 z-30 lg:hidden"
