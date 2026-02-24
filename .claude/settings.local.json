@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(test:*)",
+      "Bash(echo typescript not installed:*)",
+      "Bash(python3:*)",
+      "Bash(node:*)",
+      "Bash(cd D:/PromiPoints/UI && npm i 2>&1)",
+      "Bash(cd D:/PromiPoints/UI && npm run build 2>&1)",
+      "Bash(ls:*)",
+      "Bash(find:*)",
+      "mcp__sqlserver-mrbubo__get_database_info",
+      "mcp__sqlserver-pectra__get_database_info",
+      "Bash(mkdir -p \"D:/PromiPoints/WeApi\" && cd \"D:/PromiPoints/WeApi\" && dotnet new sln -n PromiPoints --force 2>&1)",
+      "Bash(cd \"D:/PromiPoints/WeApi\" && dotnet new webapi -n WebApi --no-openapi false --framework net8.0 --force 2>&1 && dotnet new classlib -n Services --framework net8.0 --force 2>&1 && dotnet new classlib -n Business --framework net8.0 --force 2>&1 && dotnet new classlib -n DataAccess --framework net8.0 --force 2>&1 && dotnet new classlib -n Shared --framework net8.0 --force 2>&1)",
+      "Bash(cd \"D:/PromiPoints/WeApi\" && dotnet sln add WebApi/WebApi.csproj Services/Services.csproj Business/Business.csproj DataAccess/DataAccess.csproj Shared/Shared.csproj 2>&1)",
+      "Bash(cd \"D:/PromiPoints/WeApi\" && dotnet add WebApi/WebApi.csproj reference Services/Services.csproj Shared/Shared.csproj DataAccess/DataAccess.csproj 2>&1 && dotnet add Services/Services.csproj reference Business/Business.csproj Shared/Shared.csproj DataAccess/DataAccess.csproj 2>&1 && dotnet add DataAccess/DataAccess.csproj reference Business/Business.csproj 2>&1 && dotnet add Business/Business.csproj reference Shared/Shared.csproj 2>&1)",
+      "Bash(cd \"D:/PromiPoints/WeApi\" && dotnet add WebApi/WebApi.csproj package Microsoft.AspNetCore.Authentication.JwtBearer --version 8.0.* 2>&1 && dotnet add WebApi/WebApi.csproj package Swashbuckle.AspNetCore --version 6.* 2>&1 && dotnet add WebApi/WebApi.csproj package Serilog.AspNetCore --version 8.* 2>&1 && dotnet add WebApi/WebApi.csproj package Serilog.Sinks.Console 2>&1 && dotnet add WebApi/WebApi.csproj package Serilog.Sinks.File 2>&1 && dotnet add WebApi/WebApi.csproj package BCrypt.Net-Next --version 4.* 2>&1 && dotnet add WebApi/WebApi.csproj package Microsoft.EntityFrameworkCore.Design --version 8.* 2>&1)",
+      "Bash(tail:*)",
+      "Bash(cd \"D:/PromiPoints/WeApi\" && dotnet build 2>&1)",
+      "Bash(cd \"D:/PromiPoints/WeApi\" && dotnet tool list -g | grep dotnet-ef || dotnet tool install --global dotnet-ef 2>&1)",
+      "Bash(cd \"D:/PromiPoints/WeApi\" && dotnet ef migrations add InitialCreate --project DataAccess --startup-project WebApi 2>&1)",
+      "Bash(cd \"D:/PromiPoints/WeApi\" && dotnet ef database update --project DataAccess --startup-project WebApi 2>&1)",
+      "Bash(cd \"D:/PromiPoints/WeApi/GenHash\" && dotnet new console --force -n GenHash 2>&1 | tail -3 && dotnet add GenHash.csproj package BCrypt.Net-Next --version 4.* 2>&1 | tail -3 && dotnet run 2>&1)",
+      "Bash(cd \"D:/PromiPoints/WeApi/GenHash2\" && dotnet run 2>&1)",
+      "Bash(cd \"D:/PromiPoints/WeApi\" && dotnet ef migrations remove --project DataAccess --startup-project WebApi --force 2>&1 && dotnet ef migrations add InitialCreate --project DataAccess --startup-project WebApi 2>&1)",
+      "mcp__sqlserver-mrbubo__sql_query",
+      "Bash(cd:*)"
+    ]
+  }
+}

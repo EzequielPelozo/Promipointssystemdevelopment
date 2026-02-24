@@ -1,0 +1,26 @@
+# .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+*.swp
+appsettings.Development.json
+appsettings.*.json
+!appsettings.json
+
+# Node / Vite
+node_modules/
+build/
+dist/
+.env
+.env.local
+.env.*.local
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
