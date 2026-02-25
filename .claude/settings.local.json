@@ -25,7 +25,10 @@
       "Bash(cd \"D:/PromiPoints/WeApi/GenHash2\" && dotnet run 2>&1)",
       "Bash(cd \"D:/PromiPoints/WeApi\" && dotnet ef migrations remove --project DataAccess --startup-project WebApi --force 2>&1 && dotnet ef migrations add InitialCreate --project DataAccess --startup-project WebApi 2>&1)",
       "mcp__sqlserver-mrbubo__sql_query",
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "Bash(cd \"D:/PromiPoints\" && git remote add origin https://github.com/EzequielPelozo/Promipointssystemdevelopment.git && git push -u origin master 2>&1)",
+      "Bash(cd D:/PromiPoints/WeApi && dotnet publish WebApi/WebApi.csproj -c Release -o publish/backend --self-contained false 2>&1)",
+      "Bash(cp:*)"
     ]
   }
 }

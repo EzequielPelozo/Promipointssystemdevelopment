@@ -1,39 +1,11 @@
-import { useState, useEffect } from 'react';
-import { User } from './types';
-import { getMe, getToken, logout } from './utils/api';
-import { Login } from './components/Login';
-import { UserDashboard } from './components/UserDashboard';
-import { PeopleDashboard } from './components/PeopleDashboard';
-import { Toaster } from './components/ui/sonner';
+import { useAuth } from '@/hooks/useAuth';
+import { LoginScreen } from '@/presentation/screens/auth/LoginScreen';
+import { UserDashboard } from '@/presentation/screens/employee/UserDashboard';
+import { PeopleDashboard } from '@/presentation/screens/hr/PeopleDashboard';
+import { ToastProvider } from '@/presentation/providers/ToastProvider';
 
 export default function App() {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    const token = getToken();
-    if (!token) {
-      setIsLoading(false);
-      return;
-    }
-
-    getMe()
-      .then((user) => setCurrentUser(user))
-      .catch(() => {
-        // Token invalid or expired — clear it
-        logout();
-      })
-      .finally(() => setIsLoading(false));
-  }, []);
-
-  const handleLogin = (user: User) => {
-    setCurrentUser(user);
-  };
-
-  const handleLogout = () => {
-    logout();
-    setCurrentUser(null);
-  };
+  const { currentUser, isLoading, handleLogin, handleLogout } = useAuth();
 
   if (isLoading) {
     return (
@@ -49,8 +21,8 @@ export default function App() {
   if (!currentUser) {
     return (
       <>
-        <Login onLogin={handleLogin} />
-        <Toaster />
+        <LoginScreen onLogin={handleLogin} />
+        <ToastProvider />
       </>
     );
   }
@@ -62,17 +34,7 @@ export default function App() {
       ) : (
         <UserDashboard user={currentUser} onLogout={handleLogout} />
       )}
-      <Toaster
-        position="top-center"
-        expand={false}
-        richColors
-        toastOptions={{
-          style: {
-            padding: '16px',
-          },
-          className: 'text-sm sm:text-base',
-        }}
-      />
+      <ToastProvider />
     </>
   );
 }
